@@ -1,0 +1,9 @@
+pyside6>=6.5
+librosa
+soundfile
+resampy
+pretty_midi
+pygame
+numpy
+onnxruntime
+basic-pitch
