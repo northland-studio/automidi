@@ -15,11 +15,11 @@ from PySide6.QtGui import QDragEnterEvent, QDropEvent, QPainter, QColor, QPen
 import numpy as np
 import pretty_midi
 
-from ..core.audio_loader import AudioLoader
-from ..core.transcriber import Transcriber, Note
-from ..core.postprocess import NotePostProcessor
-from ..core.midi_generator import MidiGenerator
-from ..core.player import AudioPlayer
+from core.audio_loader import AudioLoader
+from core.transcriber import Transcriber, Note
+from core.postprocess import NotePostProcessor
+from core.midi_generator import MidiGenerator
+from core.player import AudioPlayer
 
 
 class WorkerThread(QThread):
