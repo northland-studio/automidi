@@ -433,7 +433,7 @@ class MainWindow(QMainWindow):
         self._drop_label.setText(f"已加载: {Path(info['path']).name}\n拖拽新文件替换")
     
     def _start_transcription(self):
-        if self._audio_data is None:
+        if self._audio_data is None and self._current_audio_path is None:
             return
         
         self._save_settings()
@@ -449,11 +449,17 @@ class MainWindow(QMainWindow):
         self._transcribe_btn.setEnabled(False)
         self._status_bar.showMessage("正在转录...")
         
-        self._worker_thread = WorkerThread(
-            self._transcriber.transcribe,
-            self._audio_data,
-            self._sample_rate
-        )
+        if self._current_audio_path:
+            self._worker_thread = WorkerThread(
+                self._transcriber.transcribe_from_file,
+                self._current_audio_path
+            )
+        else:
+            self._worker_thread = WorkerThread(
+                self._transcriber.transcribe,
+                self._audio_data,
+                self._sample_rate
+            )
         self._worker_thread.progress.connect(self._on_transcribe_progress)
         self._worker_thread.finished.connect(self._on_transcription_finished)
         self._worker_thread.error.connect(self._on_error)
