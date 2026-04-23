@@ -41,12 +41,12 @@ class Transcriber(QObject):
         self.progress_updated.emit(5)
         
         try:
-            from basic_pitch.inference import predict_and_save
+            from basic_pitch.inference import predict
             from basic_pitch import ICASSP_2022_MODEL_PATH
             self.progress_updated.emit(10)
             
-            model_output, midi_data, note_events = predict_and_save(
-                [audio_data],
+            model_output, midi_data, note_events = predict(
+                audio_data,
                 sample_rate,
                 onset_threshold=self._onset_threshold,
                 frame_threshold=self._frame_threshold,
