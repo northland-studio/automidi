@@ -8,10 +8,10 @@ from PySide6.QtWidgets import (
     QGroupBox, QSlider, QSpinBox, QDoubleSpinBox,
     QCheckBox, QMessageBox, QStatusBar, QFrame,
     QSplitter, QTextEdit, QComboBox, QTabWidget,
-    QDockWidget, QShortcut, QApplication
+    QDockWidget, QApplication
 )
 from PySide6.QtCore import Qt, QThread, Signal, QSettings, QTimer
-from PySide6.QtGui import QDragEnterEvent, QDropEvent, QPainter, QColor, QPen, QKeySequence, QAction
+from PySide6.QtGui import QDragEnterEvent, QDropEvent, QPainter, QColor, QPen, QKeySequence, QAction, QShortcut
 
 import numpy as np
 import pretty_midi
