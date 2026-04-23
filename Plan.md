@@ -3,98 +3,186 @@
 ## 项目信息
 
 - 项目名称: AutoMidi
-- 版本: 1.0.0
+- 当前版本: 1.0.0
+- 目标版本: 2.0.0
 - 开发者: 北域工作室
 - 开始日期: 2026-04-23
 
-## 项目目标
+## 版本历史
 
-开发一款独立桌面软件，支持用户拖拽/选择音频文件，经自动转录后生成并导出 MIDI 文件，并可预览播放。
+### v1.0.0 (2026-04-23)
+- 初始版本发布
+- 实现音频转MIDI核心功能
+- 实现图形用户界面
+- 支持多种音频格式
+- 支持参数调节和预览播放
 
-## 技术栈
+---
 
-- 语言: Python 3.10+
-- GUI: PySide6 (Qt for Python)
-- 音频处理: librosa, soundfile
-- 转录引擎: Spotify basic-pitch
-- MIDI 生成: pretty\_midi
-- 播放预览: pygame
+## v2.0.0 开发计划
 
-## 开发进度
+### 版本目标
+在 v1.0.0 基础上，新增音源分离、ONNX优化、批量处理、MIDI编辑、和弦检测等高级功能，提升用户体验。
 
-### 第一阶段: 项目初始化 \[已完成]
+### 开发进度
 
-- [x] 创建项目目录结构
-- [x] 创建 requirements.txt 依赖清单
-- [x] 配置开发环境
+#### 第一阶段: 核心拓展 [进行中]
 
-### 第二阶段: 核心模块开发 \[已完成]
+##### 1. 音源分离模块 (core/source_separator.py)
+- [ ] 集成 demucs 库
+- [ ] 实现音频分离为人声/贝斯/鼓/其他轨道
+- [ ] 支持选择特定轨道进行转录
+- [ ] 多轨道转录结果合并
+- [ ] 分离进度回调
 
-- [x] 音频加载模块 (core/audio\_loader.py)
-  - 支持多种音频格式 (WAV, MP3, FLAC, OGG, M4A)
-  - 自动重采样到 22050Hz
-  - 波形摘要生成
-- [x] 转录引擎模块 (core/transcriber.py)
-  - 集成 basic-pitch 进行音频转MIDI
-  - 支持阈值参数调节
-  - 备用转录方案 (librosa)
-- [x] 音符后处理模块 (core/postprocess.py)
-  - 音符时长过滤
-  - 相邻音符合并
-  - 力度调整
-  - 量化功能
-- [x] MIDI 生成模块 (core/midi\_generator.py)
-  - 生成标准 MIDI 文件
-  - 支持乐器选择
-  - 导出功能
-- [x] 播放器模块 (core/player.py)
-  - 原始音频播放
-  - MIDI 合成播放
-  - 播放控制
+##### 2. ONNX 模型优化 (core/onnx_transcriber.py)
+- [ ] 将 basic-pitch TensorFlow 模型转换为 ONNX
+- [ ] 实现 ONNX 推理引擎
+- [ ] 减少 TensorFlow 依赖
+- [ ] 优化推理速度
+- [ ] 模型文件打包
 
-### 第三阶段: 用户界面开发 \[已完成]
+##### 3. 批量处理功能
+- [ ] 支持多文件选择
+- [ ] 批量转录队列管理
+- [ ] 批量导出设置
+- [ ] 进度汇总显示
 
-- [x] 主窗口界面 (ui/main\_window\.py)
-  - 文件拖拽区域
-  - 波形可视化
-  - 音频信息显示
-  - 转录选项面板
-  - 控制按钮
-  - 进度条
-  - 状态栏
-- [x] 应用入口 (main.py)
+#### 第二阶段: 功能增强 [待开始]
 
-### 第四阶段: 测试与优化 \[进行中]
+##### 4. MIDI 编辑功能 (ui/midi_editor.py)
+- [ ] MIDI 文件导入
+- [ ] 钢琴卷帘编辑器
+- [ ] 音符选择/移动/删除
+- [ ] 音符属性编辑 (音高/力度/时长)
+- [ ] 撤销/重做功能
 
+##### 5. 和弦检测功能 (core/chord_detector.py)
+- [ ] 实现和弦识别算法
+- [ ] 显示和弦进行
+- [ ] 和弦标注导出
+
+##### 6. 节拍/调性检测 (core/analyzer.py)
+- [ ] BPM 自动检测
+- [ ] 调性识别
+- [ ] 节拍网格显示
+- [ ] 拍号检测
+
+##### 7. 量化功能增强
+- [ ] 网格量化选项 (1/4, 1/8, 1/16, 1/32)
+- [ ] 量化强度调节
+- [ ] 人性化摇摆功能
+
+#### 第三阶段: 用户体验 [待开始]
+
+##### 8. 主题切换
+- [ ] 深色主题
+- [ ] 浅色主题
+- [ ] 自定义主题配置
+
+##### 9. 快捷键支持
+- [ ] 文件操作快捷键 (Ctrl+O, Ctrl+S)
+- [ ] 播放控制快捷键 (Space, Esc)
+- [ ] 编辑操作快捷键 (Ctrl+Z, Ctrl+Y)
+
+##### 10. 用户预设功能
+- [ ] 保存当前参数配置
+- [ ] 加载预设配置
+- [ ] 预设管理界面
+
+##### 11. 国际化支持
+- [ ] 中文界面
+- [ ] 英文界面
+- [ ] 语言切换功能
+
+##### 12. 个性化设置
+- [ ] 独立导出路径设置
+- [ ] 默认文件名模板
+- [ ] 自动保存设置
+
+#### 第四阶段: 发布准备 [待开始]
+
+##### 13. PyInstaller 打包
+- [ ] 创建打包配置文件
+- [ ] 包含所有依赖
+- [ ] 包含模型文件
+- [ ] 添加应用图标
+- [ ] 测试打包结果
+
+##### 14. 全栈测试
 - [ ] 功能测试
-- [ ] 性能优化
-- [ ] 打包发布
+- [ ] 性能测试
+- [ ] 兼容性测试
+- [ ] 用户测试
 
-## 文件结构
+##### 15. 文档更新
+- [ ] 更新 README.md
+- [ ] 撰写 Reporter.md
+- [ ] 用户手册
+
+##### 16. 发布
+- [ ] 代码提交
+- [ ] 推送到远程仓库
+- [ ] 创建 Release
+
+---
+
+## 文件结构 (v2.0.0)
 
 ```
-audio2midi/
-├── main.py                 # 应用入口
+automidi/
+├── main.py                     # 应用入口
 ├── ui/
 │   ├── __init__.py
-│   └── main_window.py      # 主窗口逻辑
+│   ├── main_window.py          # 主窗口
+│   ├── midi_editor.py          # MIDI编辑器 [新增]
+│   ├── settings_dialog.py      # 设置对话框 [新增]
+│   ├── batch_dialog.py         # 批量处理对话框 [新增]
+│   ├── theme.py                # 主题管理 [新增]
+│   └── resources/              # 资源文件 [新增]
+│       ├── icons/
+│       ├── themes/
+│       └── i18n/
 ├── core/
 │   ├── __init__.py
-│   ├── audio_loader.py     # 音频加载与预处理
-│   ├── transcriber.py      # 转录引擎封装
-│   ├── postprocess.py      # 音符后处理
-│   ├── midi_generator.py   # MIDI 生成与导出
-│   └── player.py           # 音频/MIDI 播放
-├── models/                 # 存放 ONNX 模型文件
+│   ├── audio_loader.py         # 音频加载
+│   ├── transcriber.py          # 转录引擎
+│   ├── onnx_transcriber.py     # ONNX转录 [新增]
+│   ├── source_separator.py     # 音源分离 [新增]
+│   ├── postprocess.py          # 音符后处理
+│   ├── midi_generator.py       # MIDI生成
+│   ├── chord_detector.py       # 和弦检测 [新增]
+│   ├── analyzer.py             # 音频分析 [新增]
+│   └── player.py               # 播放器
+├── models/                     # 模型文件
+│   ├── basic_pitch.onnx        # ONNX模型 [新增]
+│   └── .gitkeep
+├── i18n/                       # 国际化 [新增]
+│   ├── zh_CN.ts
+│   └── en_US.ts
 ├── requirements.txt
 ├── Plan.md
-└── README.md
+├── Reporter.md                 # 测试报告 [新增]
+├── README.md
+└── AutoMidi.spec               # PyInstaller配置 [新增]
 ```
 
-## 后续计划
+## 依赖更新
 
-1. 添加音源分离功能 (demucs)
-2. 批量处理支持
-3. ONNX 模型优化
-4. PyInstaller 打包
+```
+pyside6>=6.5
+librosa
+soundfile
+resampy
+pretty_midi
+pygame
+numpy
+onnxruntime
+basic-pitch
+demucs                    # [新增] 音源分离
+```
 
+## 远程仓库
+
+- GitHub: git@github.com:northland-studio/automidi.git
+- Gitee: git@gitee.com:northland_studio/automidi.git

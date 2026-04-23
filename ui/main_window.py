@@ -7,10 +7,11 @@ from PySide6.QtWidgets import (
     QLabel, QPushButton, QProgressBar, QFileDialog,
     QGroupBox, QSlider, QSpinBox, QDoubleSpinBox,
     QCheckBox, QMessageBox, QStatusBar, QFrame,
-    QSplitter, QTextEdit, QComboBox
+    QSplitter, QTextEdit, QComboBox, QTabWidget,
+    QDockWidget, QAction, QShortcut, QApplication
 )
 from PySide6.QtCore import Qt, QThread, Signal, QSettings, QTimer
-from PySide6.QtGui import QDragEnterEvent, QDropEvent, QPainter, QColor, QPen
+from PySide6.QtGui import QDragEnterEvent, QDropEvent, QPainter, QColor, QPen, QKeySequence
 
 import numpy as np
 import pretty_midi
@@ -20,6 +21,14 @@ from core.transcriber import Transcriber, Note
 from core.postprocess import NotePostProcessor
 from core.midi_generator import MidiGenerator
 from core.player import AudioPlayer
+from core.source_separator import SourceSeparator
+from core.chord_detector import ChordDetector
+from core.analyzer import AudioAnalyzer
+
+from ui.midi_editor import MidiEditor
+from ui.batch_dialog import BatchDialog
+from ui.settings_dialog import SettingsDialog
+from ui.theme import ThemeManager
 
 
 class WorkerThread(QThread):
@@ -101,6 +110,9 @@ class MainWindow(QMainWindow):
         self._postprocessor = NotePostProcessor()
         self._midi_generator = MidiGenerator()
         self._player = AudioPlayer()
+        self._source_separator = SourceSeparator()
+        self._chord_detector = ChordDetector()
+        self._audio_analyzer = AudioAnalyzer()
         
         self._audio_data: Optional[np.ndarray] = None
         self._sample_rate: int = 0
@@ -116,6 +128,9 @@ class MainWindow(QMainWindow):
         self._init_ui()
         self._connect_signals()
         self._load_settings()
+        self._setup_shortcuts()
+        
+        self._apply_theme()
         
         self.setAcceptDrops(True)
     
@@ -152,30 +167,64 @@ class MainWindow(QMainWindow):
         
         file_menu = menubar.addMenu("文件")
         
-        open_action = file_menu.addAction("打开音频文件")
+        open_action = QAction("打开音频文件", self)
+        open_action.setShortcut(QKeySequence("Ctrl+O"))
         open_action.triggered.connect(self._open_file_dialog)
+        file_menu.addAction(open_action)
+        
+        batch_action = QAction("批量处理", self)
+        batch_action.triggered.connect(self._show_batch_dialog)
+        file_menu.addAction(batch_action)
         
         file_menu.addSeparator()
         
-        export_action = file_menu.addAction("导出MIDI")
+        export_action = QAction("导出MIDI", self)
+        export_action.setShortcut(QKeySequence("Ctrl+S"))
         export_action.triggered.connect(self._export_midi)
         export_action.setEnabled(True)
         self._export_action = export_action
+        file_menu.addAction(export_action)
         
         file_menu.addSeparator()
         
-        exit_action = file_menu.addAction("退出")
+        exit_action = QAction("退出", self)
+        exit_action.setShortcut(QKeySequence("Ctrl+Q"))
         exit_action.triggered.connect(self.close)
+        file_menu.addAction(exit_action)
         
-        settings_menu = menubar.addMenu("设置")
+        edit_menu = menubar.addMenu("编辑")
         
-        reset_action = settings_menu.addAction("重置设置")
-        reset_action.triggered.connect(self._reset_settings)
+        settings_action = QAction("设置", self)
+        settings_action.triggered.connect(self._show_settings_dialog)
+        edit_menu.addAction(settings_action)
+        
+        tools_menu = menubar.addMenu("工具")
+        
+        analyze_action = QAction("分析音频", self)
+        analyze_action.triggered.connect(self._analyze_audio)
+        tools_menu.addAction(analyze_action)
+        
+        chord_action = QAction("检测和弦", self)
+        chord_action.triggered.connect(self._detect_chords)
+        tools_menu.addAction(chord_action)
+        
+        view_menu = menubar.addMenu("视图")
+        
+        theme_group = view_menu.addMenu("主题")
+        
+        dark_action = QAction("深色主题", self)
+        dark_action.triggered.connect(lambda: self._set_theme('dark'))
+        theme_group.addAction(dark_action)
+        
+        light_action = QAction("浅色主题", self)
+        light_action.triggered.connect(lambda: self._set_theme('light'))
+        theme_group.addAction(light_action)
         
         help_menu = menubar.addMenu("帮助")
         
-        about_action = help_menu.addAction("关于")
+        about_action = QAction("关于", self)
         about_action.triggered.connect(self._show_about)
+        help_menu.addAction(about_action)
     
     def _create_drop_area(self, parent_layout):
         drop_group = QGroupBox("音频文件")
@@ -592,11 +641,98 @@ class MainWindow(QMainWindow):
             self,
             "关于 AutoMidi",
             "AutoMidi - 音频转MIDI工具\n\n"
-            "版本: 1.0.0\n"
+            "版本: 2.0.0\n"
             "开发者: 北域工作室\n\n"
             "一款将音频文件自动转录为MIDI的桌面应用\n"
-            "支持多种音频格式，提供可视化波形预览"
+            "支持多种音频格式，提供可视化波形预览\n\n"
+            "新功能: 音源分离、批量处理、MIDI编辑、和弦检测"
         )
+    
+    def _show_batch_dialog(self):
+        dialog = BatchDialog(self)
+        dialog.exec()
+    
+    def _show_settings_dialog(self):
+        dialog = SettingsDialog(self)
+        dialog.exec()
+    
+    def _setup_shortcuts(self):
+        self._shortcut_play = QShortcut(QKeySequence(Qt.Key_Space), self)
+        self._shortcut_play.activated.connect(self._toggle_playback)
+        
+        self._shortcut_stop = QShortcut(QKeySequence(Qt.Key_Escape), self)
+        self._shortcut_stop.activated.connect(self._stop_playback)
+    
+    def _toggle_playback(self):
+        if self._player.is_playing:
+            self._stop_playback()
+        elif self._midi_data:
+            self._toggle_play_midi()
+        elif self._current_audio_path:
+            self._toggle_play_audio()
+    
+    def _apply_theme(self):
+        theme = self._settings.value("theme", 0, type=int)
+        theme_name = ['dark', 'light', 'dark'][theme]
+        ThemeManager.apply_theme(QApplication.instance(), theme_name)
+    
+    def _set_theme(self, theme_name: str):
+        theme_index = {'dark': 0, 'light': 1}.get(theme_name, 0)
+        self._settings.setValue("theme", theme_index)
+        ThemeManager.apply_theme(QApplication.instance(), theme_name)
+        self._status_bar.showMessage(f"已切换到{'深色' if theme_name == 'dark' else '浅色'}主题")
+    
+    def _analyze_audio(self):
+        if self._audio_data is None:
+            QMessageBox.warning(self, "警告", "请先加载音频文件")
+            return
+        
+        self._status_bar.showMessage("正在分析音频...")
+        
+        try:
+            analysis = self._audio_analyzer.analyze(self._audio_data, self._sample_rate)
+            
+            QMessageBox.information(
+                self,
+                "音频分析结果",
+                f"BPM: {analysis.bpm:.1f}\n"
+                f"调性: {analysis.key}\n"
+                f"拍号: {analysis.time_signature[0]}/{analysis.time_signature[1]}\n"
+                f"置信度: {analysis.confidence:.2%}"
+            )
+            
+            self._status_bar.showMessage(f"分析完成: BPM={analysis.bpm:.1f}, 调性={analysis.key}")
+            
+        except Exception as e:
+            QMessageBox.critical(self, "错误", f"分析失败: {str(e)}")
+    
+    def _detect_chords(self):
+        if self._audio_data is None:
+            QMessageBox.warning(self, "警告", "请先加载音频文件")
+            return
+        
+        self._status_bar.showMessage("正在检测和弦...")
+        
+        try:
+            chords = self._chord_detector.detect(self._audio_data, self._sample_rate)
+            
+            chord_summary = []
+            for chord in chords[:10]:
+                chord_summary.append(f"{chord.name}: {chord.start_time:.2f}s - {chord.end_time:.2f}s")
+            
+            if len(chords) > 10:
+                chord_summary.append(f"... 共 {len(chords)} 个和弦")
+            
+            QMessageBox.information(
+                self,
+                "和弦检测结果",
+                "\n".join(chord_summary)
+            )
+            
+            self._status_bar.showMessage(f"检测完成: 共 {len(chords)} 个和弦")
+            
+        except Exception as e:
+            QMessageBox.critical(self, "错误", f"检测失败: {str(e)}")
     
     def closeEvent(self, event):
         self._save_settings()

@@ -7,3 +7,4 @@ pygame
 numpy
 onnxruntime
 basic-pitch
+demucs
