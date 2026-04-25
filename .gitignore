@@ -40,8 +40,11 @@ env/
 AutoMidi.spec
 build.bat
 build.sh
+build_installer.bat
+installer.iss
 tools/ffmpeg/*.exe
 tools/ffmpeg/*.dll
+installer/
 
 # Logs
 *.log
