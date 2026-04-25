@@ -8,3 +8,4 @@ numpy
 onnxruntime
 basic-pitch
 demucs
+imageio-ffmpeg

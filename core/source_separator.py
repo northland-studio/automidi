@@ -30,6 +30,7 @@ class SourceSeparator(QObject):
         self._is_available = False
         self._separator = None
         self._has_new_api = False
+        self._ffmpeg_path: Optional[str] = None
         self._check_availability()
     
     def _check_availability(self) -> None:
@@ -44,20 +45,63 @@ class SourceSeparator(QObject):
                 self._has_new_api = False
                 logger.info("demucs 可用 (旧API)")
             
-            if not self._check_ffmpeg():
-                logger.warning("ffmpeg/ffprobe 未安装，音源分离可能无法正常工作")
+            self._setup_ffmpeg()
                 
         except ImportError:
             self._is_available = False
             logger.warning("demucs 未安装")
     
-    def _check_ffmpeg(self) -> bool:
+    def _setup_ffmpeg(self) -> bool:
+        try:
+            import imageio_ffmpeg
+            self._ffmpeg_path = imageio_ffmpeg.get_ffmpeg_exe()
+            ffmpeg_dir = str(Path(self._ffmpeg_path).parent)
+            
+            current_path = os.environ.get('PATH', '')
+            if ffmpeg_dir not in current_path:
+                os.environ['PATH'] = ffmpeg_dir + os.pathsep + current_path
+            
+            ffmpeg_exe = self._ffmpeg_path
+            ffprobe_exe = str(Path(self._ffmpeg_path).parent / 'ffprobe.exe')
+            
+            if not os.path.exists(ffprobe_exe):
+                ffprobe_exe = self._ffmpeg_path
+            
+            os.environ['FFMPEG_BINARY'] = ffmpeg_exe
+            os.environ['FFPROBE_BINARY'] = ffprobe_exe
+            
+            logger.info(f"使用内置 ffmpeg: {self._ffmpeg_path}")
+            return True
+            
+        except ImportError:
+            logger.debug("imageio-ffmpeg 未安装，尝试系统 ffmpeg")
+            return self._check_system_ffmpeg()
+        except Exception as e:
+            logger.warning(f"设置内置 ffmpeg 失败: {str(e)}")
+            return self._check_system_ffmpeg()
+    
+    def _check_system_ffmpeg(self) -> bool:
         try:
             subprocess.run(['ffmpeg', '-version'], capture_output=True, check=True)
             subprocess.run(['ffprobe', '-version'], capture_output=True, check=True)
+            logger.info("使用系统 ffmpeg")
             return True
         except (subprocess.CalledProcessError, FileNotFoundError):
+            logger.warning("ffmpeg/ffprobe 未找到")
             return False
+    
+    def _check_ffmpeg(self) -> bool:
+        if self._ffmpeg_path:
+            return True
+        
+        try:
+            import imageio_ffmpeg
+            self._ffmpeg_path = imageio_ffmpeg.get_ffmpeg_exe()
+            return True
+        except ImportError:
+            pass
+        
+        return self._check_system_ffmpeg()
     
     @property
     def is_available(self) -> bool:
@@ -75,10 +119,9 @@ class SourceSeparator(QObject):
         if not self._check_ffmpeg():
             raise RuntimeError(
                 "ffmpeg/ffprobe 未安装。\n"
-                "请安装 ffmpeg:\n"
-                "- Windows: 从 https://ffmpeg.org/download.html 下载并添加到 PATH\n"
-                "- 或使用: conda install ffmpeg -c conda-forge\n"
-                "- 或使用: pip install ffmpeg-python"
+                "请安装:\n"
+                "- pip install imageio-ffmpeg (推荐，自动内置)\n"
+                "- 或从 https://ffmpeg.org/download.html 下载并添加到 PATH"
             )
         
         logger.info(f"开始分离音频: {audio_path}")
