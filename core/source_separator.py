@@ -1,12 +1,15 @@
 import numpy as np
 import os
+import sys
 import subprocess
+import shutil
 from typing import Optional, List, Dict
 from pathlib import Path
 from dataclasses import dataclass
 from PySide6.QtCore import QObject, Signal
 
 from .logger import logger
+from .ffmpeg_manager import setup_ffmpeg_env, check_ffmpeg_available, get_ffmpeg_dir
 
 
 @dataclass
@@ -30,7 +33,7 @@ class SourceSeparator(QObject):
         self._is_available = False
         self._separator = None
         self._has_new_api = False
-        self._ffmpeg_path: Optional[str] = None
+        self._ffmpeg_configured = False
         self._check_availability()
     
     def _check_availability(self) -> None:
@@ -45,63 +48,16 @@ class SourceSeparator(QObject):
                 self._has_new_api = False
                 logger.info("demucs 可用 (旧API)")
             
-            self._setup_ffmpeg()
+            success, message = setup_ffmpeg_env()
+            self._ffmpeg_configured = success
+            if success:
+                logger.info(message)
+            else:
+                logger.warning(message)
                 
         except ImportError:
             self._is_available = False
             logger.warning("demucs 未安装")
-    
-    def _setup_ffmpeg(self) -> bool:
-        try:
-            import imageio_ffmpeg
-            self._ffmpeg_path = imageio_ffmpeg.get_ffmpeg_exe()
-            ffmpeg_dir = str(Path(self._ffmpeg_path).parent)
-            
-            current_path = os.environ.get('PATH', '')
-            if ffmpeg_dir not in current_path:
-                os.environ['PATH'] = ffmpeg_dir + os.pathsep + current_path
-            
-            ffmpeg_exe = self._ffmpeg_path
-            ffprobe_exe = str(Path(self._ffmpeg_path).parent / 'ffprobe.exe')
-            
-            if not os.path.exists(ffprobe_exe):
-                ffprobe_exe = self._ffmpeg_path
-            
-            os.environ['FFMPEG_BINARY'] = ffmpeg_exe
-            os.environ['FFPROBE_BINARY'] = ffprobe_exe
-            
-            logger.info(f"使用内置 ffmpeg: {self._ffmpeg_path}")
-            return True
-            
-        except ImportError:
-            logger.debug("imageio-ffmpeg 未安装，尝试系统 ffmpeg")
-            return self._check_system_ffmpeg()
-        except Exception as e:
-            logger.warning(f"设置内置 ffmpeg 失败: {str(e)}")
-            return self._check_system_ffmpeg()
-    
-    def _check_system_ffmpeg(self) -> bool:
-        try:
-            subprocess.run(['ffmpeg', '-version'], capture_output=True, check=True)
-            subprocess.run(['ffprobe', '-version'], capture_output=True, check=True)
-            logger.info("使用系统 ffmpeg")
-            return True
-        except (subprocess.CalledProcessError, FileNotFoundError):
-            logger.warning("ffmpeg/ffprobe 未找到")
-            return False
-    
-    def _check_ffmpeg(self) -> bool:
-        if self._ffmpeg_path:
-            return True
-        
-        try:
-            import imageio_ffmpeg
-            self._ffmpeg_path = imageio_ffmpeg.get_ffmpeg_exe()
-            return True
-        except ImportError:
-            pass
-        
-        return self._check_system_ffmpeg()
     
     @property
     def is_available(self) -> bool:
@@ -116,13 +72,11 @@ class SourceSeparator(QObject):
         if not self._is_available:
             raise ImportError("demucs 未安装，请运行: pip install demucs")
         
-        if not self._check_ffmpeg():
-            raise RuntimeError(
-                "ffmpeg/ffprobe 未安装。\n"
-                "请安装:\n"
-                "- pip install imageio-ffmpeg (推荐，自动内置)\n"
-                "- 或从 https://ffmpeg.org/download.html 下载并添加到 PATH"
-            )
+        if not self._ffmpeg_configured:
+            success, message = setup_ffmpeg_env()
+            if not success:
+                raise RuntimeError(message)
+            self._ffmpeg_configured = success
         
         logger.info(f"开始分离音频: {audio_path}")
         self.progress_updated.emit(5)
@@ -192,7 +146,6 @@ class SourceSeparator(QObject):
         
         from demucs import pretrained
         from demucs.apply import apply_model
-        from demucs.audio import AudioFile
         
         self.progress_updated.emit(20)
         
@@ -202,8 +155,10 @@ class SourceSeparator(QObject):
         
         self.progress_updated.emit(30)
         
-        audio_file = AudioFile(audio_path)
-        audio = audio_file.read(streams=0, samplerate=44100, channels=2)
+        audio, sr = self._load_audio_with_librosa(audio_path)
+        audio = torch.from_numpy(audio).float()
+        if audio.ndim == 1:
+            audio = audio.unsqueeze(0)
         audio = audio.to(device)
         
         self.progress_updated.emit(40)
@@ -236,6 +191,13 @@ class SourceSeparator(QObject):
         logger.info(f"音频分离完成，共 {len(self._separated_tracks)} 个轨道")
         
         return self._separated_tracks
+    
+    def _load_audio_with_librosa(self, audio_path: str):
+        import librosa
+        audio, sr = librosa.load(audio_path, sr=44100, mono=False)
+        if audio.ndim == 1:
+            audio = np.stack([audio, audio])
+        return audio, sr
     
     def separate_async(self, audio_path: str) -> None:
         try:
