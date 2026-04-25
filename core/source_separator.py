@@ -30,6 +30,7 @@ class SourceSeparator(QObject):
         super().__init__(parent)
         self._separated_tracks: Dict[str, SeparatedTrack] = {}
         self._model_name = "htdemucs"
+        self._device = "auto"
         self._is_available = False
         self._separator = None
         self._has_new_api = False
@@ -68,6 +69,20 @@ class SourceSeparator(QObject):
         self._separator = None
         logger.info(f"设置分离模型: {model_name}")
     
+    def set_device(self, device: str) -> None:
+        self._device = device
+        self._separator = None
+        logger.info(f"设置分离设备: {device}")
+    
+    def _get_device(self) -> str:
+        if self._device == "auto":
+            try:
+                import torch
+                return "cuda" if torch.cuda.is_available() else "cpu"
+            except ImportError:
+                return "cpu"
+        return self._device
+    
     def separate(self, audio_path: str) -> Dict[str, SeparatedTrack]:
         if not self._is_available:
             raise ImportError("demucs 未安装，请运行: pip install demucs")
@@ -97,7 +112,7 @@ class SourceSeparator(QObject):
         self.progress_updated.emit(10)
         
         if self._separator is None:
-            device = "cuda" if torch.cuda.is_available() else "cpu"
+            device = self._get_device()
             logger.info(f"加载分离模型 {self._model_name}, 设备: {device}")
             
             from demucs.api import Separator
@@ -141,7 +156,7 @@ class SourceSeparator(QObject):
         
         self.progress_updated.emit(10)
         
-        device = "cuda" if torch.cuda.is_available() else "cpu"
+        device = self._get_device()
         logger.info(f"加载分离模型 {self._model_name}, 设备: {device}")
         
         from demucs import pretrained

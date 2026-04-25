@@ -101,6 +101,14 @@ class SettingsDialog(QDialog):
         model_layout.addStretch()
         source_layout.addLayout(model_layout)
         
+        device_layout = QHBoxLayout()
+        device_layout.addWidget(QLabel("计算设备:"))
+        self._separator_device = QComboBox()
+        self._separator_device.addItems(["自动", "CPU", "GPU (CUDA)"])
+        device_layout.addWidget(self._separator_device)
+        device_layout.addStretch()
+        source_layout.addLayout(device_layout)
+        
         layout.addWidget(source_group)
         layout.addStretch()
         
@@ -232,6 +240,7 @@ class SettingsDialog(QDialog):
         self._min_note_spin.setValue(self._settings.value("min_note_length", 50, type=int))
         self._enable_separator.setChecked(self._settings.value("enable_separator", False, type=bool))
         self._separator_model.setCurrentText(self._settings.value("separator_model", "htdemucs"))
+        self._separator_device.setCurrentIndex(self._settings.value("separator_device", 0, type=int))
         self._use_source_dir.setChecked(self._settings.value("use_source_dir", True, type=bool))
         self._export_path.setText(self._settings.value("export_path", ""))
         self._name_template.setText(self._settings.value("name_template", "{name}"))
@@ -247,6 +256,7 @@ class SettingsDialog(QDialog):
         self._settings.setValue("min_note_length", self._min_note_spin.value())
         self._settings.setValue("enable_separator", self._enable_separator.isChecked())
         self._settings.setValue("separator_model", self._separator_model.currentText())
+        self._settings.setValue("separator_device", self._separator_device.currentIndex())
         self._settings.setValue("use_source_dir", self._use_source_dir.isChecked())
         self._settings.setValue("export_path", self._export_path.text())
         self._settings.setValue("name_template", self._name_template.text())
@@ -263,27 +273,42 @@ class SettingsDialog(QDialog):
     
     def _load_presets(self):
         self._preset_list.clear()
-        presets = self._settings.value("presets", {}, type=dict)
+        import json
+        presets_json = self._settings.value("presets", "{}")
+        try:
+            presets = json.loads(presets_json) if presets_json else {}
+        except json.JSONDecodeError:
+            presets = {}
         for name in presets.keys():
             self._preset_list.addItem(name)
     
     def _save_preset(self):
         from PySide6.QtWidgets import QInputDialog
+        import json
         name, ok = QInputDialog.getText(self, "保存预设", "预设名称:")
         if ok and name:
-            presets = self._settings.value("presets", {}, type=dict)
+            presets_json = self._settings.value("presets", "{}")
+            try:
+                presets = json.loads(presets_json) if presets_json else {}
+            except json.JSONDecodeError:
+                presets = {}
             presets[name] = {
                 "onset": self._onset_spin.value(),
                 "frame": self._frame_spin.value(),
                 "min_note": self._min_note_spin.value(),
             }
-            self._settings.setValue("presets", presets)
+            self._settings.setValue("presets", json.dumps(presets))
             self._load_presets()
     
     def _load_preset(self):
         item = self._preset_list.currentItem()
         if item:
-            presets = self._settings.value("presets", {}, type=dict)
+            import json
+            presets_json = self._settings.value("presets", "{}")
+            try:
+                presets = json.loads(presets_json) if presets_json else {}
+            except json.JSONDecodeError:
+                presets = {}
             preset = presets.get(item.text(), {})
             if preset:
                 self._onset_spin.setValue(preset.get("onset", 0.5))
@@ -293,8 +318,13 @@ class SettingsDialog(QDialog):
     def _delete_preset(self):
         item = self._preset_list.currentItem()
         if item:
-            presets = self._settings.value("presets", {}, type=dict)
+            import json
+            presets_json = self._settings.value("presets", "{}")
+            try:
+                presets = json.loads(presets_json) if presets_json else {}
+            except json.JSONDecodeError:
+                presets = {}
             if item.text() in presets:
                 del presets[item.text()]
-                self._settings.setValue("presets", presets)
+                self._settings.setValue("presets", json.dumps(presets))
                 self._load_presets()

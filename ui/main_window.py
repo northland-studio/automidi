@@ -595,6 +595,11 @@ class MainWindow(QMainWindow):
             logger.info(f"使用分离模型: {model_name}")
             self._source_separator.set_model(model_name)
             
+            device_index = self._settings.value("separator_device", 0, type=int)
+            device_map = {0: "auto", 1: "cpu", 2: "cuda"}
+            device = device_map.get(device_index, "auto")
+            self._source_separator.set_device(device)
+            
             if isinstance(audio_path_or_data, str):
                 logger.debug(f"从文件分离: {audio_path_or_data}")
                 tracks = self._source_separator.separate(audio_path_or_data)
@@ -623,8 +628,8 @@ class MainWindow(QMainWindow):
                     continue
                 
                 logger.info(f"转录轨道: {track_name}")
-                audio = track_data['audio_data']
-                sr = track_data['sample_rate']
+                audio = track_data.audio_data
+                sr = track_data.sample_rate
                 
                 notes = self._transcriber.transcribe(audio, sr)
                 logger.info(f"轨道 {track_name} 转录完成: {len(notes)} 个音符")
