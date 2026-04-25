@@ -383,10 +383,6 @@ class MainWindow(QMainWindow):
         self._track_other.setEnabled(enabled)
         self._separator_model_label.setEnabled(enabled)
         self._tracks_label.setEnabled(enabled)
-        
-        options_layout.addStretch()
-        
-        parent_layout.addWidget(options_group)
     
     def _create_control_panel(self, parent_layout):
         control_group = QGroupBox("控制")
@@ -581,39 +577,50 @@ class MainWindow(QMainWindow):
     
     def _transcribe_with_separation(self, audio_path_or_data, sample_rate=None):
         all_notes = []
+        temp_path = None
         
-        self._source_separator.set_model(self._separator_model_combo.currentText())
-        
-        if isinstance(audio_path_or_data, str):
-            tracks = self._source_separator.separate(audio_path_or_data)
-        else:
-            import tempfile
-            import soundfile as sf
-            with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as f:
-                temp_path = f.name
-            sf.write(temp_path, audio_path_or_data, sample_rate)
-            tracks = self._source_separator.separate(temp_path)
-            import os
-            os.remove(temp_path)
-        
-        track_selection = {
-            'vocals': self._track_vocals.isChecked(),
-            'drums': self._track_drums.isChecked(),
-            'bass': self._track_bass.isChecked(),
-            'other': self._track_other.isChecked()
-        }
-        
-        for track_name, track_data in tracks.items():
-            if not track_selection.get(track_name, False):
-                continue
+        try:
+            self._source_separator.set_model(self._separator_model_combo.currentText())
             
-            audio = track_data['audio_data']
-            sr = track_data['sample_rate']
+            if isinstance(audio_path_or_data, str):
+                tracks = self._source_separator.separate(audio_path_or_data)
+            else:
+                import tempfile
+                import soundfile as sf
+                import os
+                
+                with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as f:
+                    temp_path = f.name
+                sf.write(temp_path, audio_path_or_data, sample_rate)
+                tracks = self._source_separator.separate(temp_path)
             
-            notes = self._transcriber.transcribe(audio, sr)
-            all_notes.extend(notes)
-        
-        return all_notes
+            track_selection = {
+                'vocals': self._track_vocals.isChecked(),
+                'drums': self._track_drums.isChecked(),
+                'bass': self._track_bass.isChecked(),
+                'other': self._track_other.isChecked()
+            }
+            
+            for track_name, track_data in tracks.items():
+                if not track_selection.get(track_name, False):
+                    continue
+                
+                audio = track_data['audio_data']
+                sr = track_data['sample_rate']
+                
+                notes = self._transcriber.transcribe(audio, sr)
+                all_notes.extend(notes)
+            
+            return all_notes
+            
+        finally:
+            if temp_path:
+                import os
+                try:
+                    if os.path.exists(temp_path):
+                        os.remove(temp_path)
+                except Exception:
+                    pass
     
     def _on_transcribe_progress(self, progress: int):
         self._progress_bar.setValue(progress)
