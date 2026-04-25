@@ -106,6 +106,14 @@ class SettingsDialog(QDialog):
         self._separator_device = QComboBox()
         self._separator_device.addItems(["自动", "CPU", "GPU (CUDA)"])
         device_layout.addWidget(self._separator_device)
+        
+        cuda_available = self._check_cuda_available()
+        cuda_status = "✓ CUDA可用" if cuda_available else "✗ CUDA不可用"
+        self._cuda_status_label = QLabel(cuda_status)
+        self._cuda_status_label.setStyleSheet(
+            "color: green;" if cuda_available else "color: red;"
+        )
+        device_layout.addWidget(self._cuda_status_label)
         device_layout.addStretch()
         source_layout.addLayout(device_layout)
         
@@ -228,6 +236,13 @@ class SettingsDialog(QDialog):
         layout.addWidget(preset_group)
         
         return widget
+    
+    def _check_cuda_available(self) -> bool:
+        try:
+            import torch
+            return torch.cuda.is_available()
+        except ImportError:
+            return False
     
     def _browse_export_path(self):
         dir_path = QFileDialog.getExistingDirectory(self, "选择导出目录")

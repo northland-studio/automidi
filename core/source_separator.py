@@ -75,13 +75,21 @@ class SourceSeparator(QObject):
         logger.info(f"设置分离设备: {device}")
     
     def _get_device(self) -> str:
-        if self._device == "auto":
-            try:
-                import torch
+        try:
+            import torch
+            if self._device == "auto":
                 return "cuda" if torch.cuda.is_available() else "cpu"
-            except ImportError:
+            elif self._device == "cuda":
+                if torch.cuda.is_available():
+                    return "cuda"
+                else:
+                    logger.warning("CUDA 不可用，自动切换到 CPU")
+                    return "cpu"
+            else:
                 return "cpu"
-        return self._device
+        except ImportError:
+            logger.warning("torch 未安装，使用 CPU")
+            return "cpu"
     
     def separate(self, audio_path: str) -> Dict[str, SeparatedTrack]:
         if not self._is_available:
