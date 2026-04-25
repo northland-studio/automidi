@@ -1,5 +1,6 @@
 from typing import Optional, List, Dict
 from pathlib import Path
+import sys
 
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
@@ -8,9 +9,20 @@ from PySide6.QtWidgets import (
     QColorDialog, QListWidget, QListWidgetItem
 )
 from PySide6.QtCore import Qt, QSettings
-from PySide6.QtGui import QColor
+from PySide6.QtGui import QColor, QIcon
 
 from core.midi_generator import MidiGenerator
+
+
+def get_icon_path() -> Optional[Path]:
+    if getattr(sys, 'frozen', False):
+        base_path = Path(sys._MEIPASS)
+    else:
+        base_path = Path(__file__).parent.parent
+    icon_path = base_path / "icon.ico"
+    if icon_path.exists():
+        return icon_path
+    return None
 
 
 class SettingsDialog(QDialog):
@@ -18,6 +30,10 @@ class SettingsDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle("设置")
         self.setMinimumSize(500, 400)
+        
+        icon_path = get_icon_path()
+        if icon_path:
+            self.setWindowIcon(QIcon(str(icon_path)))
         
         self._settings = QSettings("NorthlandStudio", "AutoMidi")
         

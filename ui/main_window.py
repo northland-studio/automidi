@@ -11,7 +11,7 @@ from PySide6.QtWidgets import (
     QDockWidget, QApplication
 )
 from PySide6.QtCore import Qt, QThread, Signal, QSettings, QTimer
-from PySide6.QtGui import QDragEnterEvent, QDropEvent, QPainter, QColor, QPen, QKeySequence, QAction, QShortcut
+from PySide6.QtGui import QDragEnterEvent, QDropEvent, QPainter, QColor, QPen, QKeySequence, QAction, QShortcut, QIcon
 
 import numpy as np
 import pretty_midi
@@ -31,6 +31,18 @@ from ui.midi_editor import MidiEditor
 from ui.batch_dialog import BatchDialog
 from ui.settings_dialog import SettingsDialog
 from ui.theme import ThemeManager
+
+
+def get_icon_path() -> Optional[Path]:
+    if getattr(sys, 'frozen', False):
+        base_path = Path(sys._MEIPASS)
+    else:
+        base_path = Path(__file__).parent.parent
+    
+    icon_path = base_path / "icon.ico"
+    if icon_path.exists():
+        return icon_path
+    return None
 
 
 class WorkerThread(QThread):
@@ -144,6 +156,10 @@ class MainWindow(QMainWindow):
     def _init_ui(self):
         self.setWindowTitle("AutoMidi - 音频转MIDI工具")
         self.setMinimumSize(900, 700)
+        
+        icon_path = get_icon_path()
+        if icon_path:
+            self.setWindowIcon(QIcon(str(icon_path)))
         
         central_widget = QWidget()
         self.setCentralWidget(central_widget)

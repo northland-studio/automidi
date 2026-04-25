@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="icon.png" alt="AutoMidi Logo" width="128">
+
 # AutoMidi
 
 **智能音频转MIDI桌面应用**

@@ -1,26 +1,39 @@
 # -*- mode: python ; coding: utf-8 -*-
 import sys
+import os
 from pathlib import Path
 
 project_root = Path(SPECPATH)
 
-ffmpeg_dir = project_root / "tools" / "ffmpeg"
-ffmpeg_binaries = []
-if ffmpeg_dir.exists():
-    for f in ffmpeg_dir.iterdir():
-        if f.is_file() and (f.suffix == '.exe' or f.name.startswith('ffmpeg') or f.name.startswith('ffprobe')):
-            ffmpeg_binaries.append((str(f), 'tools/ffmpeg'))
+def collect_datas():
+    datas = []
+    
+    models_dir = project_root / "models"
+    if models_dir.exists():
+        datas.append(('models', 'models'))
+    
+    themes_dir = project_root / "ui" / "themes"
+    if themes_dir.exists():
+        datas.append(('ui/themes', 'ui/themes'))
+    
+    return datas
+
+def collect_ffmpeg_binaries():
+    binaries = []
+    ffmpeg_dir = project_root / "tools" / "ffmpeg"
+    if ffmpeg_dir.exists():
+        for f in ffmpeg_dir.iterdir():
+            if f.is_file() and (f.suffix == '.exe' or f.name.startswith('ffmpeg') or f.name.startswith('ffprobe')):
+                binaries.append((str(f), 'tools/ffmpeg'))
+    return binaries
 
 block_cipher = None
 
 a = Analysis(
     ['main.py'],
     pathex=[],
-    binaries=ffmpeg_binaries,
-    datas=[
-        ('models', 'models'),
-        ('ui/themes', 'ui/themes'),
-    ],
+    binaries=collect_ffmpeg_binaries(),
+    datas=collect_datas(),
     hiddenimports=[
         'PySide6.QtCore',
         'PySide6.QtGui',
@@ -58,6 +71,9 @@ a = Analysis(
 
 pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
 
+icon_path = project_root / "icon.ico"
+icon_arg = str(icon_path) if icon_path.exists() else None
+
 exe = EXE(
     pyz,
     a.scripts,
@@ -74,7 +90,7 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=None,
+    icon=icon_arg,
 )
 
 coll = COLLECT(
