@@ -1,8 +1,8 @@
 import pygame
 import numpy as np
 import tempfile
-import threading
-from typing import Optional, Callable
+import os
+from typing import Optional
 from pathlib import Path
 from PySide6.QtCore import QObject, Signal, QTimer
 
@@ -23,6 +23,7 @@ class AudioPlayer(QObject):
         self._is_playing = False
         self._is_paused = False
         self._current_file: Optional[str] = None
+        self._temp_file: Optional[str] = None
         self._duration: float = 0.0
         self._position: float = 0.0
         
@@ -47,6 +48,7 @@ class AudioPlayer(QObject):
                 raise FileNotFoundError(f"音频文件不存在: {file_path}")
             
             self.stop()
+            self._cleanup_temp_file()
             
             pygame.mixer.music.load(file_path)
             self._current_file = file_path
@@ -68,22 +70,29 @@ class AudioPlayer(QObject):
         
         try:
             self.stop()
+            self._cleanup_temp_file()
             
-            audio_data = midi_data.fluidsynth(sf2_path=soundfont_path)
+            try:
+                audio_data = midi_data.fluidsynth(sf2_path=soundfont_path)
+                audio_data = np.mean(audio_data, axis=0) if audio_data.ndim > 1 else audio_data
+            except Exception:
+                audio_data = midi_data.synthesize()
             
-            audio_data = np.mean(audio_data, axis=0) if audio_data.ndim > 1 else audio_data
-            audio_data = (audio_data * 32767).astype(np.int16)
+            if audio_data.dtype != np.float32:
+                audio_data = audio_data.astype(np.float32)
             
-            audio_data = np.column_stack((audio_data, audio_data))
+            audio_data = np.clip(audio_data, -1.0, 1.0)
+            audio_data_int = (audio_data * 32767).astype(np.int16)
+            audio_stereo = np.column_stack((audio_data_int, audio_data_int))
             
             with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as f:
-                temp_path = f.name
+                self._temp_file = f.name
             
             import soundfile as sf
-            sf.write(temp_path, audio_data, 44100)
+            sf.write(self._temp_file, audio_stereo, 44100)
             
-            pygame.mixer.music.load(temp_path)
-            self._current_file = temp_path
+            pygame.mixer.music.load(self._temp_file)
+            self._current_file = self._temp_file
             self._duration = midi_data.get_end_time()
             self._position = 0.0
             
@@ -92,6 +101,14 @@ class AudioPlayer(QObject):
         except Exception as e:
             self.error_occurred.emit(f"加载MIDI失败: {str(e)}")
             return False
+    
+    def _cleanup_temp_file(self):
+        if self._temp_file and os.path.exists(self._temp_file):
+            try:
+                os.remove(self._temp_file)
+            except Exception:
+                pass
+            self._temp_file = None
     
     def play(self) -> bool:
         if not self._initialized or not self._current_file:
@@ -199,6 +216,7 @@ class AudioPlayer(QObject):
     
     def cleanup(self) -> None:
         self.stop()
+        self._cleanup_temp_file()
         if self._initialized:
             pygame.mixer.quit()
         self._initialized = False

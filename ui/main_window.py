@@ -281,7 +281,9 @@ class MainWindow(QMainWindow):
     
     def _create_options_panel(self, parent_layout):
         options_group = QGroupBox("转录选项")
-        options_layout = QHBoxLayout(options_group)
+        options_layout = QVBoxLayout(options_group)
+        
+        row1_layout = QHBoxLayout()
         
         onset_label = QLabel("起音阈值:")
         self._onset_slider = QSlider(Qt.Horizontal)
@@ -293,9 +295,9 @@ class MainWindow(QMainWindow):
             lambda v: onset_value.setText(f"{v/100:.2f}")
         )
         
-        options_layout.addWidget(onset_label)
-        options_layout.addWidget(self._onset_slider)
-        options_layout.addWidget(onset_value)
+        row1_layout.addWidget(onset_label)
+        row1_layout.addWidget(self._onset_slider)
+        row1_layout.addWidget(onset_value)
         
         frame_label = QLabel("帧阈值:")
         self._frame_slider = QSlider(Qt.Horizontal)
@@ -307,17 +309,17 @@ class MainWindow(QMainWindow):
             lambda v: frame_value.setText(f"{v/100:.2f}")
         )
         
-        options_layout.addWidget(frame_label)
-        options_layout.addWidget(self._frame_slider)
-        options_layout.addWidget(frame_value)
+        row1_layout.addWidget(frame_label)
+        row1_layout.addWidget(self._frame_slider)
+        row1_layout.addWidget(frame_value)
         
         min_note_label = QLabel("最小音符时长(ms):")
         self._min_note_spin = QSpinBox()
         self._min_note_spin.setRange(10, 500)
         self._min_note_spin.setValue(50)
         
-        options_layout.addWidget(min_note_label)
-        options_layout.addWidget(self._min_note_spin)
+        row1_layout.addWidget(min_note_label)
+        row1_layout.addWidget(self._min_note_spin)
         
         instrument_label = QLabel("乐器:")
         self._instrument_combo = QComboBox()
@@ -325,8 +327,62 @@ class MainWindow(QMainWindow):
         self._instrument_combo.addItems(instruments[:20])
         self._instrument_combo.setCurrentIndex(0)
         
-        options_layout.addWidget(instrument_label)
-        options_layout.addWidget(self._instrument_combo)
+        row1_layout.addWidget(instrument_label)
+        row1_layout.addWidget(self._instrument_combo)
+        row1_layout.addStretch()
+        
+        options_layout.addLayout(row1_layout)
+        
+        row2_layout = QHBoxLayout()
+        
+        self._enable_separator = QCheckBox("启用音源分离")
+        self._enable_separator.toggled.connect(self._on_separator_toggled)
+        row2_layout.addWidget(self._enable_separator)
+        
+        self._separator_model_label = QLabel("模型:")
+        self._separator_model_combo = QComboBox()
+        self._separator_model_combo.addItems(SourceSeparator.get_available_models())
+        self._separator_model_combo.setEnabled(False)
+        row2_layout.addWidget(self._separator_model_label)
+        row2_layout.addWidget(self._separator_model_combo)
+        
+        self._tracks_label = QLabel("转录轨道:")
+        row2_layout.addWidget(self._tracks_label)
+        
+        self._track_vocals = QCheckBox("人声")
+        self._track_vocals.setChecked(False)
+        self._track_vocals.setEnabled(False)
+        row2_layout.addWidget(self._track_vocals)
+        
+        self._track_drums = QCheckBox("鼓")
+        self._track_drums.setChecked(False)
+        self._track_drums.setEnabled(False)
+        row2_layout.addWidget(self._track_drums)
+        
+        self._track_bass = QCheckBox("贝斯")
+        self._track_bass.setChecked(False)
+        self._track_bass.setEnabled(False)
+        row2_layout.addWidget(self._track_bass)
+        
+        self._track_other = QCheckBox("其他")
+        self._track_other.setChecked(True)
+        self._track_other.setEnabled(False)
+        row2_layout.addWidget(self._track_other)
+        
+        row2_layout.addStretch()
+        
+        options_layout.addLayout(row2_layout)
+        
+        parent_layout.addWidget(options_group)
+    
+    def _on_separator_toggled(self, enabled: bool):
+        self._separator_model_combo.setEnabled(enabled)
+        self._track_vocals.setEnabled(enabled)
+        self._track_drums.setEnabled(enabled)
+        self._track_bass.setEnabled(enabled)
+        self._track_other.setEnabled(enabled)
+        self._separator_model_label.setEnabled(enabled)
+        self._tracks_label.setEnabled(enabled)
         
         options_layout.addStretch()
         
@@ -496,23 +552,68 @@ class MainWindow(QMainWindow):
         self._progress_bar.setVisible(True)
         self._progress_bar.setValue(0)
         self._transcribe_btn.setEnabled(False)
-        self._status_bar.showMessage("正在转录...")
         
-        if self._current_audio_path:
+        if self._enable_separator.isChecked():
+            self._status_bar.showMessage("正在进行音源分离...")
             self._worker_thread = WorkerThread(
-                self._transcriber.transcribe_from_file,
-                self._current_audio_path
+                self._transcribe_with_separation,
+                self._current_audio_path or self._audio_data,
+                self._sample_rate if self._audio_data is not None else None
             )
         else:
-            self._worker_thread = WorkerThread(
-                self._transcriber.transcribe,
-                self._audio_data,
-                self._sample_rate
-            )
+            self._status_bar.showMessage("正在转录...")
+            if self._current_audio_path:
+                self._worker_thread = WorkerThread(
+                    self._transcriber.transcribe_from_file,
+                    self._current_audio_path
+                )
+            else:
+                self._worker_thread = WorkerThread(
+                    self._transcriber.transcribe,
+                    self._audio_data,
+                    self._sample_rate
+                )
+        
         self._worker_thread.progress.connect(self._on_transcribe_progress)
         self._worker_thread.finished.connect(self._on_transcription_finished)
         self._worker_thread.error.connect(self._on_error)
         self._worker_thread.start()
+    
+    def _transcribe_with_separation(self, audio_path_or_data, sample_rate=None):
+        all_notes = []
+        
+        self._source_separator.set_model(self._separator_model_combo.currentText())
+        
+        if isinstance(audio_path_or_data, str):
+            tracks = self._source_separator.separate(audio_path_or_data)
+        else:
+            import tempfile
+            import soundfile as sf
+            with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as f:
+                temp_path = f.name
+            sf.write(temp_path, audio_path_or_data, sample_rate)
+            tracks = self._source_separator.separate(temp_path)
+            import os
+            os.remove(temp_path)
+        
+        track_selection = {
+            'vocals': self._track_vocals.isChecked(),
+            'drums': self._track_drums.isChecked(),
+            'bass': self._track_bass.isChecked(),
+            'other': self._track_other.isChecked()
+        }
+        
+        for track_name, track_data in tracks.items():
+            if not track_selection.get(track_name, False):
+                continue
+            
+            audio = track_data['audio_data']
+            sr = track_data['sample_rate']
+            
+            notes = self._transcriber.transcribe(audio, sr)
+            all_notes.extend(notes)
+        
+        return all_notes
     
     def _on_transcribe_progress(self, progress: int):
         self._progress_bar.setValue(progress)
