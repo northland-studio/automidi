@@ -36,6 +36,13 @@ env/
 # PyInstaller
 *.manifest
 
+# Build artifacts
+AutoMidi.spec
+build.bat
+build.sh
+tools/ffmpeg/*.exe
+tools/ffmpeg/*.dll
+
 # Logs
 *.log
 logs/

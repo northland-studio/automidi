@@ -755,7 +755,25 @@ class MainWindow(QMainWindow):
         
         default_name = "output.mid"
         if self._current_audio_path:
-            default_name = Path(self._current_audio_path).stem + ".mid"
+            base_name = Path(self._current_audio_path).stem
+            
+            if self._enable_separator.isChecked():
+                track_suffixes = []
+                if self._track_vocals.isChecked():
+                    track_suffixes.append("vocals")
+                if self._track_drums.isChecked():
+                    track_suffixes.append("drums")
+                if self._track_bass.isChecked():
+                    track_suffixes.append("bass")
+                if self._track_other.isChecked():
+                    track_suffixes.append("other")
+                
+                if track_suffixes:
+                    default_name = f"{base_name}_{'_'.join(track_suffixes)}.mid"
+                else:
+                    default_name = f"{base_name}.mid"
+            else:
+                default_name = f"{base_name}.mid"
         
         file_path, _ = QFileDialog.getSaveFileName(
             self,
