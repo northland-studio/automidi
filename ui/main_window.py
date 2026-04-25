@@ -15,6 +15,7 @@ from PySide6.QtGui import QDragEnterEvent, QDropEvent, QPainter, QColor, QPen, Q
 
 import numpy as np
 import pretty_midi
+import traceback
 
 from core.audio_loader import AudioLoader
 from core.transcriber import Transcriber, Note
@@ -24,6 +25,7 @@ from core.player import AudioPlayer
 from core.source_separator import SourceSeparator
 from core.chord_detector import ChordDetector
 from core.analyzer import AudioAnalyzer
+from core.logger import logger
 
 from ui.midi_editor import MidiEditor
 from ui.batch_dialog import BatchDialog
@@ -47,6 +49,7 @@ class WorkerThread(QThread):
             result = self._task(*self._args, **self._kwargs)
             self.finished.emit(result)
         except Exception as e:
+            logger.exception(f"WorkerThread 错误: {str(e)}")
             self.error.emit(str(e))
 
 
@@ -105,6 +108,8 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         
+        logger.info("AutoMidi 启动中...")
+        
         self._audio_loader = AudioLoader()
         self._transcriber = Transcriber()
         self._postprocessor = NotePostProcessor()
@@ -133,6 +138,8 @@ class MainWindow(QMainWindow):
         self._apply_theme()
         
         self.setAcceptDrops(True)
+        
+        logger.info(f"AutoMidi 启动完成，日志文件: {logger.log_path}")
     
     def _init_ui(self):
         self.setWindowTitle("AutoMidi - 音频转MIDI工具")
@@ -500,6 +507,7 @@ class MainWindow(QMainWindow):
             self._load_audio_file(file_path)
     
     def _load_audio_file(self, file_path: str):
+        logger.info(f"加载音频文件: {file_path}")
         self._status_bar.showMessage(f"正在加载: {Path(file_path).name}")
         self._progress_bar.setVisible(True)
         self._progress_bar.setValue(0)
@@ -510,9 +518,11 @@ class MainWindow(QMainWindow):
             audio_data, sr, info = self._audio_loader.load_audio(file_path)
             self._on_audio_loaded(audio_data, sr, info)
         except Exception as e:
+            logger.exception(f"加载音频失败: {file_path}")
             self._on_error(f"加载音频失败: {str(e)}")
     
     def _on_audio_loaded(self, audio_data: np.ndarray, sample_rate: int, info: dict):
+        logger.info(f"音频加载完成: {info['path']}, 时长: {info['duration']:.2f}s, 采样率: {info['original_sr']}Hz")
         self._audio_data = audio_data
         self._sample_rate = sample_rate
         self._audio_info = info
@@ -576,13 +586,17 @@ class MainWindow(QMainWindow):
         self._worker_thread.start()
     
     def _transcribe_with_separation(self, audio_path_or_data, sample_rate=None):
+        logger.info("开始音源分离转录...")
         all_notes = []
         temp_path = None
         
         try:
-            self._source_separator.set_model(self._separator_model_combo.currentText())
+            model_name = self._separator_model_combo.currentText()
+            logger.info(f"使用分离模型: {model_name}")
+            self._source_separator.set_model(model_name)
             
             if isinstance(audio_path_or_data, str):
+                logger.debug(f"从文件分离: {audio_path_or_data}")
                 tracks = self._source_separator.separate(audio_path_or_data)
             else:
                 import tempfile
@@ -591,6 +605,7 @@ class MainWindow(QMainWindow):
                 
                 with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as f:
                     temp_path = f.name
+                logger.debug(f"创建临时文件: {temp_path}")
                 sf.write(temp_path, audio_path_or_data, sample_rate)
                 tracks = self._source_separator.separate(temp_path)
             
@@ -601,26 +616,35 @@ class MainWindow(QMainWindow):
                 'other': self._track_other.isChecked()
             }
             
+            logger.info(f"选择的轨道: {track_selection}")
+            
             for track_name, track_data in tracks.items():
                 if not track_selection.get(track_name, False):
                     continue
                 
+                logger.info(f"转录轨道: {track_name}")
                 audio = track_data['audio_data']
                 sr = track_data['sample_rate']
                 
                 notes = self._transcriber.transcribe(audio, sr)
+                logger.info(f"轨道 {track_name} 转录完成: {len(notes)} 个音符")
                 all_notes.extend(notes)
             
+            logger.info(f"音源分离转录完成，共 {len(all_notes)} 个音符")
             return all_notes
             
+        except Exception as e:
+            logger.exception(f"音源分离转录失败: {str(e)}")
+            raise
         finally:
             if temp_path:
                 import os
                 try:
                     if os.path.exists(temp_path):
                         os.remove(temp_path)
-                except Exception:
-                    pass
+                        logger.debug(f"删除临时文件: {temp_path}")
+                except Exception as e:
+                    logger.warning(f"删除临时文件失败: {str(e)}")
     
     def _on_transcribe_progress(self, progress: int):
         self._progress_bar.setValue(progress)
@@ -677,14 +701,25 @@ class MainWindow(QMainWindow):
             self._play_audio_btn.setText("暂停")
     
     def _toggle_play_midi(self):
+        logger.debug("切换MIDI播放")
         if self._player.is_playing:
             self._player.pause()
             self._play_midi_btn.setText("继续播放MIDI")
         else:
             if self._midi_data:
-                self._player.load_midi(self._midi_data)
-            self._player.play()
-            self._play_midi_btn.setText("暂停MIDI")
+                logger.info("加载并播放MIDI")
+                try:
+                    if self._player.load_midi(self._midi_data):
+                        self._player.play()
+                        self._play_midi_btn.setText("暂停MIDI")
+                    else:
+                        logger.error("加载MIDI失败")
+                        QMessageBox.warning(self, "警告", "无法加载MIDI进行播放")
+                except Exception as e:
+                    logger.exception(f"播放MIDI失败: {str(e)}")
+                    QMessageBox.critical(self, "错误", f"播放MIDI失败: {str(e)}")
+            else:
+                logger.warning("没有MIDI数据可播放")
     
     def _stop_playback(self):
         self._player.stop()
@@ -739,6 +774,7 @@ class MainWindow(QMainWindow):
         self._progress_bar.setValue(progress)
     
     def _on_error(self, message: str):
+        logger.error(f"错误: {message}")
         self._progress_bar.setVisible(False)
         self._transcribe_btn.setEnabled(self._audio_data is not None)
         self._status_bar.showMessage(f"错误: {message}")

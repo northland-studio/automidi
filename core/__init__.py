@@ -7,6 +7,7 @@ from .source_separator import SourceSeparator, SeparatedTrack
 from .onnx_transcriber import OnnxTranscriber
 from .chord_detector import ChordDetector, Chord
 from .analyzer import AudioAnalyzer, AudioAnalysis
+from .logger import logger, get_logger
 
 __all__ = [
     'AudioLoader',
@@ -21,5 +22,7 @@ __all__ = [
     'ChordDetector',
     'Chord',
     'AudioAnalyzer',
-    'AudioAnalysis'
+    'AudioAnalysis',
+    'logger',
+    'get_logger'
 ]

@@ -8,6 +8,8 @@ from PySide6.QtCore import QObject, Signal, QTimer
 
 import pretty_midi
 
+from .logger import logger
+
 
 class AudioPlayer(QObject):
     playback_started = Signal()
@@ -36,17 +38,21 @@ class AudioPlayer(QObject):
         try:
             pygame.mixer.init(frequency=44100, size=-16, channels=2, buffer=512)
             self._initialized = True
+            logger.info("Pygame mixer 初始化成功")
         except Exception as e:
+            logger.exception(f"初始化音频播放器失败: {str(e)}")
             self.error_occurred.emit(f"初始化音频播放器失败: {str(e)}")
     
     def load_audio(self, file_path: str) -> bool:
         if not self._initialized:
+            logger.warning("播放器未初始化")
             return False
         
         try:
             if not Path(file_path).exists():
                 raise FileNotFoundError(f"音频文件不存在: {file_path}")
             
+            logger.info(f"加载音频文件: {file_path}")
             self.stop()
             self._cleanup_temp_file()
             
@@ -58,24 +64,31 @@ class AudioPlayer(QObject):
             self._duration = duration
             self._position = 0.0
             
+            logger.debug(f"音频加载成功，时长: {duration:.2f}s")
             return True
             
         except Exception as e:
+            logger.exception(f"加载音频失败: {str(e)}")
             self.error_occurred.emit(f"加载音频失败: {str(e)}")
             return False
     
     def load_midi(self, midi_data: pretty_midi.PrettyMIDI, soundfont_path: Optional[str] = None) -> bool:
         if not self._initialized:
+            logger.warning("播放器未初始化")
             return False
         
         try:
+            logger.info("开始加载MIDI数据")
             self.stop()
             self._cleanup_temp_file()
             
             try:
+                logger.debug("尝试使用 fluidsynth 合成")
                 audio_data = midi_data.fluidsynth(sf2_path=soundfont_path)
                 audio_data = np.mean(audio_data, axis=0) if audio_data.ndim > 1 else audio_data
-            except Exception:
+                logger.debug("fluidsynth 合成成功")
+            except Exception as e:
+                logger.warning(f"fluidsynth 合成失败: {str(e)}，使用 synthesize")
                 audio_data = midi_data.synthesize()
             
             if audio_data.dtype != np.float32:
@@ -88,6 +101,8 @@ class AudioPlayer(QObject):
             with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as f:
                 self._temp_file = f.name
             
+            logger.debug(f"创建临时WAV文件: {self._temp_file}")
+            
             import soundfile as sf
             sf.write(self._temp_file, audio_stereo, 44100)
             
@@ -96,9 +111,11 @@ class AudioPlayer(QObject):
             self._duration = midi_data.get_end_time()
             self._position = 0.0
             
+            logger.info(f"MIDI加载成功，时长: {self._duration:.2f}s")
             return True
             
         except Exception as e:
+            logger.exception(f"加载MIDI失败: {str(e)}")
             self.error_occurred.emit(f"加载MIDI失败: {str(e)}")
             return False
     
@@ -106,19 +123,23 @@ class AudioPlayer(QObject):
         if self._temp_file and os.path.exists(self._temp_file):
             try:
                 os.remove(self._temp_file)
-            except Exception:
-                pass
+                logger.debug(f"清理临时文件: {self._temp_file}")
+            except Exception as e:
+                logger.warning(f"清理临时文件失败: {str(e)}")
             self._temp_file = None
     
     def play(self) -> bool:
         if not self._initialized or not self._current_file:
+            logger.warning("无法播放: 播放器未初始化或没有加载文件")
             return False
         
         try:
             if self._is_paused:
                 pygame.mixer.music.unpause()
+                logger.debug("继续播放")
             else:
                 pygame.mixer.music.play()
+                logger.info("开始播放")
             
             self._is_playing = True
             self._is_paused = False
@@ -128,6 +149,7 @@ class AudioPlayer(QObject):
             return True
             
         except Exception as e:
+            logger.exception(f"播放失败: {str(e)}")
             self.error_occurred.emit(f"播放失败: {str(e)}")
             return False
     
